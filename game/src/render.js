@@ -893,24 +893,148 @@ function drawTickets(ctx, state, now) {
   }
 }
 
-/** Little flames that lick up under whatever is on the grill, flickering. */
-function drawFlames(ctx, cx, baseY, now, seed) {
-  for (let i = -1; i <= 1; i += 1) {
-    const fx = cx + i * 17;
-    const h = 15 + 5 * Math.sin(now * 11 + seed + i * 2.3) + 3 * Math.sin(now * 23 + i);
-    ctx.fillStyle = '#e2703a';
+/** One teardrop flame: a deep-orange body, a bright-orange belly, a pale core. */
+function flameTongue(ctx, x, baseY, w, h, sway) {
+  const layers = [
+    ['rgba(226, 112, 58, 0.95)', 1, 1],
+    ['rgba(246, 139, 46, 0.95)', 0.66, 0.78],
+    ['rgba(255, 233, 160, 0.98)', 0.36, 0.52],
+  ];
+  for (const [colour, wf, hf] of layers) {
+    ctx.fillStyle = colour;
     ctx.beginPath();
-    ctx.moveTo(fx - 8, baseY);
-    ctx.quadraticCurveTo(fx - 7, baseY - h * 0.6, fx, baseY - h);
-    ctx.quadraticCurveTo(fx + 7, baseY - h * 0.6, fx + 8, baseY);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#f6b93b';
-    ctx.beginPath();
-    ctx.moveTo(fx - 4.5, baseY);
-    ctx.quadraticCurveTo(fx - 4, baseY - h * 0.35, fx, baseY - h * 0.58);
-    ctx.quadraticCurveTo(fx + 4, baseY - h * 0.35, fx + 4.5, baseY);
+    ctx.moveTo(x - w * wf, baseY);
+    ctx.quadraticCurveTo(x - w * wf * 0.9, baseY - h * hf * 0.55, x + sway * wf, baseY - h * hf);
+    ctx.quadraticCurveTo(x + w * wf * 0.9, baseY - h * hf * 0.55, x + w * wf, baseY);
     ctx.closePath(); ctx.fill();
   }
+}
+
+/**
+ * The grill's fire: five layered tongues, each dancing on its own flicker
+ * phase, licking up under whatever cooks. Heat 1 is a full cooking blaze;
+ * a low heat is the calm lick left once a slot has dinged ready.
+ */
+function drawFlames(ctx, cx, baseY, now, seed, heat = 1) {
+  for (let i = 0; i < 5; i += 1) {
+    const fx = cx + (i - 2) * 16.5;
+    const phase = seed + i * 1.93;
+    const flicker = 0.78 + 0.16 * Math.sin(now * 12 + phase) + 0.1 * Math.sin(now * 27 + phase * 2.7);
+    flameTongue(ctx, fx, baseY, 8.6, 21 * heat * flicker, Math.sin(now * 7.3 + phase) * 2.4);
+  }
+}
+
+/**
+ * The grill's coal bed: a warm halo pooled across the slot and spilling onto
+ * its frame, then two rows of rounded coals, each glowing at its own heat,
+ * the hottest with a bright heart. Heat follows the slot: banked when empty,
+ * fierce while cooking, settled once ready.
+ */
+function drawCoalBed(ctx, slotRect, now, slotIndex, heat) {
+  const cx = slotRect.x + slotRect.width / 2;
+  const pulse = 0.85 + 0.15 * Math.sin(now * 5.1 + slotIndex * 2.4);
+  const halo = ctx.createRadialGradient(cx, slotRect.y + 92, 6, cx, slotRect.y + 92, 64);
+  halo.addColorStop(0, `rgba(255, 122, 40, ${0.34 * heat * pulse})`);
+  halo.addColorStop(1, 'rgba(255, 122, 40, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(slotRect.x - 6, slotRect.y + 26, slotRect.width + 12, slotRect.height - 12);
+  for (let coal = 0; coal < 14; coal += 1) {
+    const row = coal < 8 ? 0 : 1;
+    const ex = slotRect.x + 18 + hash01(slotIndex * 41 + coal * 7.3) * (slotRect.width - 36);
+    const ey = slotRect.y + 92 + row * 13 + hash01(slotIndex * 19 + coal * 3.1) * 5;
+    const erx = 6.5 + hash01(coal * 5.7 + slotIndex) * 4.5;
+    const own = 0.3 + 0.7 * hash01(coal * 11.3 + slotIndex * 7);
+    const glow = own * heat * (0.82 + 0.18 * Math.sin(now * 3.4 + coal * 2.13 + slotIndex * 3));
+    ctx.fillStyle = `rgba(255, 96, 26, ${0.3 * glow})`;
+    ctx.beginPath(); ctx.ellipse(ex, ey, erx * 1.8, erx * 1.05, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(${Math.round(38 + 168 * glow)}, ${Math.round(20 + 62 * glow)}, 14)`;
+    ctx.beginPath(); ctx.ellipse(ex, ey, erx, erx * 0.58, 0, 0, Math.PI * 2); ctx.fill();
+    if (own > 0.72) {
+      ctx.fillStyle = `rgba(255, 205, 105, ${0.75 * glow})`;
+      ctx.beginPath(); ctx.ellipse(ex - erx * 0.25, ey - 1.5, erx * 0.34, erx * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+/**
+ * The pot's living surface: rolling bubbles with bright crescents (one or two
+ * always mid-pop), a ring of foam gathered where broth meets rim, and a slow
+ * shimmer of light sliding across the surface.
+ */
+function drawBroth(ctx, cx, slotRect, now, slotIndex) {
+  const cy = slotRect.y + 34;
+  const rx = slotRect.width / 2 - 15;
+  const ry = 13;
+  // Shimmer: a soft band of light drifting back and forth across the broth.
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.clip();
+  const shimmerX = cx + Math.sin(now * 0.7 + slotIndex * 2.1) * rx * 0.55;
+  const band = ctx.createLinearGradient(shimmerX - 16, 0, shimmerX + 16, 0);
+  band.addColorStop(0, 'rgba(255, 240, 200, 0)');
+  band.addColorStop(0.5, 'rgba(255, 240, 200, 0.2)');
+  band.addColorStop(1, 'rgba(255, 240, 200, 0)');
+  ctx.fillStyle = band;
+  ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+  ctx.restore();
+  // Rolling bubbles, each swelling and easing at its own rate.
+  for (let bubble = 0; bubble < 9; bubble += 1) {
+    const angle = hash01(slotIndex * 23 + bubble * 7.7) * Math.PI * 2;
+    const dist = 0.25 + 0.62 * hash01(slotIndex * 29 + bubble * 3.9);
+    const bx = cx + Math.cos(angle) * rx * dist;
+    const by = cy + Math.sin(angle) * ry * dist;
+    const wave = Math.sin(now * (2.6 + hash01(bubble * 13.1) * 2.2) + bubble * 2.37 + slotIndex * 1.9);
+    const br = (1.6 + 1.7 * hash01(bubble * 5.3 + slotIndex)) * (0.6 + 0.4 * wave);
+    if (wave > 0.93) {
+      // Mid-pop: a broken ring where the bubble just burst.
+      ctx.strokeStyle = 'rgba(255, 232, 180, 0.8)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(bx, by, br + 0.8, 0.4, Math.PI * 1.7); ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(255, 228, 170, 0.55)';
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 246, 220, 0.85)'; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.arc(bx, by, br * 0.72, Math.PI * 1.05, Math.PI * 1.55); ctx.stroke();
+    }
+  }
+  // Foam gathered in a ring where the broth meets the rim.
+  for (let foam = 0; foam < 11; foam += 1) {
+    const angle = (foam / 11) * Math.PI * 2 + hash01(foam * 3.3 + slotIndex) * 0.3;
+    const fx = cx + Math.cos(angle) * rx * 0.94;
+    const fy = cy + Math.sin(angle) * ry * 0.94;
+    const fr = 1.4 + 1.5 * hash01(foam * 7.9 + slotIndex * 3) * (0.75 + 0.25 * Math.sin(now * 3 + foam * 1.7));
+    ctx.fillStyle = 'rgba(255, 240, 205, 0.75)';
+    ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/** The pot's back layer of steam: broad soft puffs that swell as they rise. */
+function drawSteamPuffs(ctx, cx, topY, now, seed) {
+  ctx.save();
+  for (let i = 0; i < 4; i += 1) {
+    const cyc = (now * 0.22 + i * 0.25 + seed * 0.13) % 1;
+    const px = cx + (i - 1.5) * 13 + Math.sin(cyc * 5.2 + seed + i) * 6;
+    const py = topY - cyc * 34;
+    ctx.fillStyle = `rgba(255, 252, 246, ${0.15 * (1 - cyc) + 0.03})`;
+    ctx.beginPath(); ctx.arc(px, py, 6 + cyc * 10, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Sizzle: little oil sparks popping off whatever is frying on the grill. */
+function drawSizzle(ctx, cx, cy, now, slotIndex) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let spark = 0; spark < 5; spark += 1) {
+    const cyc = (now * 0.85 + hash01(spark * 17.3 + slotIndex * 29)) % 1;
+    const sx = cx + (hash01(spark * 7.1 + slotIndex * 5) - 0.5) * 46;
+    const sy = cy + 16 - cyc * 30;
+    ctx.strokeStyle = `rgba(255, ${Math.round(180 + 60 * (1 - cyc))}, 90, ${0.85 * (1 - cyc)})`;
+    ctx.lineWidth = 1.7;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + (hash01(spark * 3.7) - 0.5) * 5, sy + 4.5);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** The bouncy gold badge a finished slot wears until it is clicked off. */
@@ -935,16 +1059,14 @@ function drawStation(ctx, state, kind, now) {
     const slot = state.stations[kind][slotIndex];
     const cx = slotRect.x + slotRect.width / 2;
     if (isGrill) {
+      // Warm light spilled onto the wooden panel the slot sits in.
+      ctx.fillStyle = 'rgba(255, 120, 40, 0.16)';
+      ctx.beginPath(); ctx.ellipse(cx, slotRect.y + slotRect.height + 8, 54, 8, 0, 0, Math.PI * 2); ctx.fill();
       fillRound(ctx, slotRect.x, slotRect.y, slotRect.width, slotRect.height, 12,
         vGrad(ctx, slotRect.y, slotRect.height, [[0, '#3a2115'], [1, '#20100a']]));
-      // Glowing embers under the grate, flickering at their own rates.
-      for (let ember = 0; ember < 9; ember += 1) {
-        const ex = slotRect.x + 16 + hash01(slotIndex * 31 + ember * 7) * (slotRect.width - 32);
-        const ey = slotRect.y + slotRect.height - 14 - hash01(slotIndex * 17 + ember * 3) * 16;
-        const glow = 0.45 + 0.4 * Math.sin(now * 7 + ember * 1.7 + slotIndex * 3);
-        ctx.fillStyle = `rgba(255, ${110 + Math.round(60 * glow)}, 40, ${glow})`;
-        ctx.beginPath(); ctx.arc(ex, ey, 3.2, 0, Math.PI * 2); ctx.fill();
-      }
+      // The coal bed under the grate, its heat following the slot's phase.
+      const heat = slot === null ? 0.3 : slot.phase === 'cooking' ? 1 : slot.phase === 'ready' ? 0.5 : 0.15;
+      drawCoalBed(ctx, slotRect, now, slotIndex, heat);
       ctx.strokeStyle = 'rgba(230, 200, 170, 0.35)'; ctx.lineWidth = 3;
       for (let line = 0; line < 4; line += 1) {
         ctx.beginPath();
@@ -953,9 +1075,18 @@ function drawStation(ctx, state, kind, now) {
         ctx.stroke();
       }
     } else {
+      // Warm light spilled onto the wooden panel the pot sits in.
+      ctx.fillStyle = 'rgba(255, 150, 60, 0.15)';
+      ctx.beginPath(); ctx.ellipse(cx, slotRect.y + slotRect.height + 8, 54, 8, 0, 0, Math.PI * 2); ctx.fill();
       // A steel pot: shaded body, side handles, a rim of bubbling broth.
       fillRound(ctx, slotRect.x, slotRect.y + 16, slotRect.width, slotRect.height - 16, 12,
         vGrad(ctx, slotRect.y, slotRect.height, [[0, '#c3ccd2'], [0.4, '#97a5ae'], [1, '#6e7c86']]));
+      // The fire's glow gathered at the pot's base, breathing slowly.
+      const basePulse = 0.75 + 0.25 * Math.sin(now * 4.2 + slotIndex * 1.9);
+      ctx.fillStyle = `rgba(255, 122, 40, ${0.26 * basePulse})`;
+      ctx.beginPath(); ctx.ellipse(cx, slotRect.y + slotRect.height - 12, 42, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255, 170, 70, ${0.3 * basePulse})`;
+      ctx.beginPath(); ctx.ellipse(cx, slotRect.y + slotRect.height - 12, 22, 5.5, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#7d8891';
       ctx.beginPath(); ctx.ellipse(slotRect.x + 8, slotRect.y + 52, 9, 14, 0, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(slotRect.x + slotRect.width - 8, slotRect.y + 52, 9, 14, 0, 0, Math.PI * 2); ctx.fill();
@@ -963,12 +1094,10 @@ function drawStation(ctx, state, kind, now) {
       ctx.beginPath(); ctx.ellipse(cx, slotRect.y + 34, slotRect.width / 2 - 8, 17, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = vGrad(ctx, slotRect.y + 20, 28, [[0, '#eda34f'], [1, '#c97b2d']]);
       ctx.beginPath(); ctx.ellipse(cx, slotRect.y + 34, slotRect.width / 2 - 15, 13, 0, 0, Math.PI * 2); ctx.fill();
-      for (let bubble = 0; bubble < 6; bubble += 1) {
-        const bx = cx + (hash01(slotIndex * 13 + bubble * 11) - 0.5) * (slotRect.width - 60);
-        const br = 2 + 1.6 * (0.5 + 0.5 * Math.sin(now * 4 + bubble * 2.1 + slotIndex));
-        ctx.fillStyle = 'rgba(255, 226, 170, 0.75)';
-        ctx.beginPath(); ctx.arc(bx, slotRect.y + 32 + hash01(bubble * 5 + slotIndex) * 6, br, 0, Math.PI * 2); ctx.fill();
-      }
+      drawBroth(ctx, cx, slotRect, now, slotIndex);
+      // The broth's colour reflected along the rim's upper edge.
+      ctx.strokeStyle = 'rgba(255, 196, 110, 0.55)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(cx, slotRect.y + 34, slotRect.width / 2 - 8, 17, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
       strokeRound(ctx, slotRect.x, slotRect.y + 16, slotRect.width, slotRect.height - 16, 12, OUTLINE, 2.5);
     }
     if (slot === null) {
@@ -992,12 +1121,33 @@ function drawStation(ctx, state, kind, now) {
     }
     if (isGrill && slot.phase === 'cooking') drawFlames(ctx, cx, slotRect.y + 88, now, slotIndex * 3.1);
     if (!isGrill) {
+      // Steam in two layers: soft wide puffs behind, brighter curls in front.
+      drawSteamPuffs(ctx, cx, slotRect.y + 18, now, slotIndex * 1.7 + 0.4);
       drawSteam(ctx, cx, slotRect.y + 14, 0.95, now * 1.6 + slotIndex * 2);
       drawSteam(ctx, cx - 15, slotRect.y + 22, 0.6, now * 1.25 + slotIndex * 3.1);
+      drawSteam(ctx, cx + 16, slotRect.y + 24, 0.5, now * 1.45 + slotIndex * 4.3);
     }
     if (isGrill) coolShadow(ctx, cx, slotRect.y + 80, 30, 7);
     else contactShadow(ctx, cx, slotRect.y + 80, 27, 6, 0.22);
-    drawIngredientIcon(ctx, slot.ingredient, cx, slotRect.y + 52, 27);
+    // What simmers in the pot bobs gently in the broth; the grill's load sits firm.
+    const bobY = isGrill ? 0 : Math.sin(now * 2.3 + slotIndex * 1.7) * (slot.phase === 'cooking' ? 2.2 : 1.2);
+    const iconY = slotRect.y + 52 + bobY;
+    drawIngredientIcon(ctx, slot.ingredient, cx, iconY, 27);
+    if (!isGrill) {
+      // A wash of broth gloss across the part that rides lowest in the pot.
+      ctx.fillStyle = 'rgba(216, 138, 52, 0.3)';
+      ctx.beginPath(); ctx.ellipse(cx, iconY + 13, 25, 8.5, 0, 0, Math.PI * 2); ctx.fill();
+      gloss(ctx, cx - 8, iconY - 12, 6, 3, 0.35);
+    }
+    if (isGrill && slot.phase === 'cooking') {
+      // Hot rim-light along the food's underside, and sparks off the sizzle.
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 138, 48, ${0.45 + 0.25 * Math.sin(now * 9 + slotIndex * 2.2)})`;
+      ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, iconY, 26, Math.PI * 0.18, Math.PI * 0.82); ctx.stroke();
+      ctx.restore();
+      drawSizzle(ctx, cx, iconY, now, slotIndex);
+    }
     if (slot.phase === 'cooking') {
       const fraction = Math.min(1, slot.t / ingredient.cookSeconds);
       ctx.strokeStyle = 'rgba(255, 248, 231, 0.3)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
@@ -1006,6 +1156,8 @@ function drawStation(ctx, state, kind, now) {
       ctx.beginPath(); ctx.arc(cx, slotRect.y + 52, 40, -Math.PI / 2, -Math.PI / 2 + fraction * Math.PI * 2); ctx.stroke();
       label(ctx, `${Math.ceil(ingredient.cookSeconds - slot.t)}s`, cx, slotRect.y + 102, { size: 14, shadow: true });
     } else {
+      // Ready: the grill's blaze calms to a low lick over the embers.
+      if (isGrill) drawFlames(ctx, cx, slotRect.y + 88, now, slotIndex * 3.1, 0.22);
       ctx.save();
       ctx.shadowColor = 'rgba(246, 185, 59, 0.9)';
       ctx.shadowBlur = 12 + 5 * Math.sin(now * 6);
