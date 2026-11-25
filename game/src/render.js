@@ -1,10 +1,11 @@
 // Saigon Sizzle — every pixel of the kitchen: the order board, the stations, the
 // plate, the pass and the counter, drawn with canvas shapes alone. The look is a
-// bright, glossy cartoon kitchen in the spirit of a co-op cooking game: cream and
-// terracotta tiles under a warm light, chunky wooden counters, paper tickets held
-// by red pins, and food drawn with shade, shine and steam. Nothing here changes
-// the game; it reads state.js and paints it, and its ingredient icons are the one
-// drawing every other surface (tickets, bins, plate, pass) shares.
+// glossy cartoon night-market stall in the spirit of a co-op cooking game: warm
+// wood and terracotta set against deep teal, a striped canopy with festival bulbs
+// over the board, paper tickets on red and teal pins, and dishes composed whole
+// on the plate — a fanned phở, a glazed cơm tấm — with shade, shine and steam.
+// Nothing here changes the game; it reads state.js and paints it, and its
+// ingredient icons are the one drawing every other surface shares.
 
 import {
   AGAIN_BUTTON, CHECKLIST_PANEL, DAY_LENGTH, FIELD, HUD, INK, MUTE_BUTTON,
@@ -30,6 +31,10 @@ const RED_DEEP = '#b02a1e';
 const LEAF = '#5cb84e';
 const LEAF_DEEP = '#3c7a34';
 const SKIN = '#ffc98f';
+const TEAL_LIGHT = '#2aa79b';
+const TEAL = '#0e6e62';
+const TEAL_DEEP = '#0a4f4a';
+const TEAL_INK = '#083f3c';
 const FONT = '"Avenir Next", "Segoe UI", system-ui, sans-serif';
 
 /** A rounded rectangle path, the shape half the kitchen is built from. */
@@ -150,6 +155,134 @@ function drawCoin(ctx, x, y, r) {
   gloss(ctx, x - r * 0.3, y - r * 0.34, r * 0.26, r * 0.15, 0.65);
 }
 
+/** A soft contact shadow: the dark pool a raised thing casts on what it sits on. */
+function contactShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {
+  ctx.save();
+  ctx.fillStyle = `rgba(43, 20, 4, ${alpha})`;
+  ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** A cool teal shadow, the bounce-light a hot pan throws back off the counter. */
+function coolShadow(ctx, cx, cy, rx, ry, alpha = 0.3) {
+  ctx.save();
+  ctx.fillStyle = `rgba(13, 92, 84, ${alpha})`;
+  ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Wood grain for a counter block: a few wavy darker strokes and one knot,
+ * placed by a hash of the panel's corner so every panel keeps its own grain.
+ */
+function woodGrain(ctx, rect) {
+  ctx.save();
+  roundRect(ctx, rect.x, rect.y, rect.width, rect.height, 16);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(84, 44, 10, 0.20)';
+  ctx.lineWidth = 1.6;
+  const seed = rect.x * 3 + rect.y * 7;
+  for (let line = 0; line < 4; line += 1) {
+    const gy = rect.y + 22 + hash01(seed + line * 13) * (rect.height - 40);
+    ctx.beginPath();
+    ctx.moveTo(rect.x + 8, gy);
+    ctx.bezierCurveTo(rect.x + rect.width * 0.35, gy + 4 - hash01(seed + line) * 8,
+      rect.x + rect.width * 0.7, gy - 4 + hash01(seed + line * 3) * 8, rect.x + rect.width - 8, gy);
+    ctx.stroke();
+  }
+  const kx = rect.x + 30 + hash01(seed + 99) * (rect.width - 60);
+  const ky = rect.y + 26 + hash01(seed + 55) * (rect.height - 52);
+  ctx.strokeStyle = 'rgba(84, 44, 10, 0.28)';
+  ctx.beginPath(); ctx.ellipse(kx, ky, 6, 3.4, 0.4, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The stall canopy over the header bar: red-and-cream stripes with a scalloped
+ * lower edge and a soft shadow under it, plus one small glowing festival bulb
+ * at each scallop dip that falls in a gap between the header's words.
+ */
+function drawAwning(ctx, width) {
+  const band = 10;
+  const stripe = 32;
+  ctx.save();
+  ctx.shadowColor = 'rgba(43, 20, 4, 0.45)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 3;
+  for (let x = 0, i = 0; x < width; x += stripe, i += 1) {
+    ctx.fillStyle = i % 2 === 0 ? '#e0483a' : '#fff3d0';
+    ctx.fillRect(x, 0, stripe, band);
+    ctx.beginPath(); ctx.ellipse(x + stripe / 2, band, stripe / 2, 8, 0, 0, Math.PI); ctx.fill();
+  }
+  ctx.restore();
+  for (let x = stripe / 2; x < width; x += stripe) {
+    const inGap = (x > 245 && x < 330) || (x > 500 && x < 795) || (x > 915 && x < 945);
+    if (!inGap) continue;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 190, 80, 0.95)';
+    ctx.shadowBlur = 9;
+    ctx.fillStyle = '#ffd968';
+    ctx.beginPath(); ctx.arc(x, band + 8, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    gloss(ctx, x - 0.8, band + 7, 0.9, 0.7, 0.9);
+  }
+}
+
+/**
+ * A string of triangle bunting flags in stall colours, sagging on its wire
+ * between two points and swaying a little in the market breeze.
+ */
+function drawBunting(ctx, x, y, width, now, seed = 0) {
+  const flags = Math.max(3, Math.floor(width / 34));
+  ctx.strokeStyle = 'rgba(255, 246, 220, 0.65)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x + width / 2, y + 10, x + width, y);
+  ctx.stroke();
+  const colours = ['#e0483a', '#f6b93b', TEAL_LIGHT, '#ff8ac2', '#5cb84e'];
+  for (let i = 0; i < flags; i += 1) {
+    const t = (i + 0.5) / flags;
+    const fx = x + width * t;
+    const fy = y + 20 * t * (1 - t);
+    const sway = Math.sin(now * 1.4 + seed + i * 1.3) * 1.6;
+    ctx.fillStyle = colours[(i + seed) % colours.length];
+    ctx.beginPath();
+    ctx.moveTo(fx - 9, fy); ctx.lineTo(fx + 9, fy); ctx.lineTo(fx + sway, fy + 15);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+/** A little stack of gold coins with a few spilled beside it, for the day card. */
+function drawCoinStack(ctx, cx, baseY) {
+  contactShadow(ctx, cx, baseY + 3, 30, 5, 0.22);
+  for (let i = 0; i < 5; i += 1) {
+    const y = baseY - i * 7;
+    ctx.fillStyle = GOLD_DEEP;
+    ctx.beginPath(); ctx.ellipse(cx, y, 17, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = GOLD;
+    ctx.beginPath(); ctx.ellipse(cx, y - 2, 17, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(122, 72, 20, 0.5)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(cx, y - 2, 17, 6, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  gloss(ctx, cx - 6, baseY - 40, 6, 2.4, 0.7);
+  drawCoin(ctx, cx + 27, baseY - 2, 8);
+  drawCoin(ctx, cx - 28, baseY - 1, 7);
+  drawSparkle(ctx, cx + 5, baseY - 54, 7, '#fff3b0', 0.9);
+}
+
+/** Dust motes drifting in the stall light: tiny warm specks on slow hashed paths. */
+function drawMotes(ctx, now) {
+  ctx.save();
+  for (let mote = 0; mote < 16; mote += 1) {
+    const mx = (hash01(mote * 17 + 3) * 1240 + now * (4 + hash01(mote) * 7)) % FIELD.width;
+    const my = 96 + hash01(mote * 29 + 8) * 470 + Math.sin(now * 0.6 + mote * 1.7) * 9;
+    ctx.fillStyle = `rgba(255, 226, 160, ${0.10 + 0.10 * hash01(mote * 7)})`;
+    ctx.beginPath(); ctx.arc(mx, my, 1.6 + hash01(mote * 3) * 1.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 /**
  * A chunky game button: a dark bottom edge the face sits on, a glossy top half,
  * the kitchen outline, and bold text. `rect` is the same rect input hit-tests.
@@ -184,9 +317,39 @@ function counterPanel(ctx, rect, title, accent = GOLD) {
     ctx.beginPath(); ctx.moveTo(px, rect.y + 6); ctx.lineTo(px, rect.y + rect.height - 6); ctx.stroke();
   }
   ctx.restore();
+  woodGrain(ctx, rect);
   strokeRound(ctx, rect.x, rect.y, rect.width, rect.height, 16, OUTLINE, 3);
   if (title !== null) {
     label(ctx, title, rect.x + 18, rect.y + 24, { size: 17, colour: '#ffe9b0', align: 'left', shadow: true });
+    ctx.fillStyle = accent;
+    ctx.fillRect(rect.x + 18, rect.y + 36, 44, 4);
+  }
+}
+
+/**
+ * A deep-teal counter block, the cool contrast the warm wood sings against:
+ * teal planks under a lit top edge, a cream pinstripe inside the one outline,
+ * and a cream title — the plate and the pass wear teal.
+ */
+function tealPanel(ctx, rect, title, accent = '#7fe0cf') {
+  shadowed(ctx, 12, 5, () => {
+    fillRound(ctx, rect.x, rect.y, rect.width, rect.height, 16, vGrad(ctx, rect.y, rect.height, [[0, '#147d72'], [0.5, TEAL], [1, TEAL_INK]]));
+  });
+  ctx.save();
+  roundRect(ctx, rect.x, rect.y, rect.width, rect.height, 16);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(190, 255, 240, 0.16)';
+  ctx.fillRect(rect.x, rect.y, rect.width, 7);
+  ctx.strokeStyle = 'rgba(4, 40, 36, 0.35)';
+  ctx.lineWidth = 2;
+  for (let px = rect.x + 64; px < rect.x + rect.width - 8; px += 128) {
+    ctx.beginPath(); ctx.moveTo(px, rect.y + 6); ctx.lineTo(px, rect.y + rect.height - 6); ctx.stroke();
+  }
+  ctx.restore();
+  strokeRound(ctx, rect.x, rect.y, rect.width, rect.height, 16, OUTLINE, 3);
+  strokeRound(ctx, rect.x + 5, rect.y + 5, rect.width - 10, rect.height - 10, 12, 'rgba(255, 246, 220, 0.35)', 1.5);
+  if (title !== null) {
+    label(ctx, title, rect.x + 18, rect.y + 24, { size: 17, colour: '#fff6dc', align: 'left', shadow: true });
     ctx.fillStyle = accent;
     ctx.fillRect(rect.x + 18, rect.y + 36, 44, 4);
   }
@@ -199,8 +362,22 @@ function drawRoom(ctx) {
     for (let col = 0; col * tile < FIELD.width; col += 1) {
       ctx.fillStyle = (row + col) % 2 === 0 ? '#f6ddab' : '#eda96f';
       ctx.fillRect(col * tile, row * tile, tile, tile);
+      // A breath of speckle in the glaze, hashed per tile so it never flickers.
+      for (let dot = 0; dot < 3; dot += 1) {
+        const dx = col * tile + 8 + hash01(row * 131 + col * 17 + dot * 7) * 48;
+        const dy = row * tile + 8 + hash01(row * 57 + col * 29 + dot * 3) * 48;
+        ctx.fillStyle = dot === 0 ? 'rgba(255, 255, 255, 0.13)' : 'rgba(122, 62, 20, 0.10)';
+        ctx.fillRect(dx, dy, 2.4, 2.4);
+      }
     }
   }
+  // The grout between the tiles.
+  ctx.strokeStyle = 'rgba(122, 62, 20, 0.20)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let gx = 0; gx <= FIELD.width; gx += tile) { ctx.moveTo(gx, 0); ctx.lineTo(gx, 596); }
+  for (let gy = 0; gy <= 596; gy += tile) { ctx.moveTo(0, gy); ctx.lineTo(FIELD.width, gy); }
+  ctx.stroke();
   ctx.fillStyle = vGrad(ctx, 596, FIELD.height - 596, [[0, WOOD_LIGHT], [0.25, WOOD], [1, WOOD_DEEP]]);
   ctx.fillRect(0, 596, FIELD.width, FIELD.height - 596);
   ctx.fillStyle = 'rgba(255, 226, 170, 0.5)';
@@ -210,9 +387,19 @@ function drawRoom(ctx) {
   for (let px = 96; px < FIELD.width; px += 160) {
     ctx.beginPath(); ctx.moveTo(px, 604); ctx.lineTo(px, FIELD.height); ctx.stroke();
   }
-  const light = ctx.createRadialGradient(640, 340, 120, 640, 340, 760);
-  light.addColorStop(0, 'rgba(255, 196, 96, 0.20)');
-  light.addColorStop(0.65, 'rgba(255, 170, 80, 0.05)');
+  ctx.strokeStyle = 'rgba(84, 44, 10, 0.22)';
+  ctx.lineWidth = 1.6;
+  for (let line = 0; line < 5; line += 1) {
+    const gy = 622 + line * 36;
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.bezierCurveTo(340, gy + 5, 900, gy - 5, FIELD.width, gy + 2);
+    ctx.stroke();
+  }
+  // The stall light, centred on the plate where the hero dish sits.
+  const light = ctx.createRadialGradient(558, 306, 110, 558, 306, 780);
+  light.addColorStop(0, 'rgba(255, 198, 100, 0.26)');
+  light.addColorStop(0.6, 'rgba(255, 170, 80, 0.06)');
   light.addColorStop(1, 'rgba(84, 34, 4, 0.30)');
   ctx.fillStyle = light;
   ctx.fillRect(0, 0, FIELD.width, FIELD.height);
@@ -512,6 +699,7 @@ function drawHud(ctx, state) {
   ctx.fillRect(HUD.x, HUD.y, HUD.width, HUD.height);
   ctx.fillStyle = GOLD;
   ctx.fillRect(0, HUD.height - 3, HUD.width, 3);
+  drawAwning(ctx, 1144);
   ctx.save();
   ctx.font = `800 24px ${FONT}`;
   ctx.textAlign = 'left';
@@ -660,12 +848,14 @@ function drawTickets(ctx, state, now) {
       ctx.restore();
     }
     strokeRound(ctx, rect.x, rect.y, rect.width, rect.height, 14, OUTLINE, 2.5);
-    // The red push-pin through the top of the ticket.
+    // A push-pin through the top of the ticket, red and teal in turn.
     ctx.save();
     ctx.shadowColor = 'rgba(46, 20, 2, 0.4)';
     ctx.shadowBlur = 3;
     ctx.shadowOffsetY = 2;
-    ctx.fillStyle = vGrad(ctx, rect.y + 2, 14, [[0, '#ff7a5c'], [1, RED_DEEP]]);
+    ctx.fillStyle = index % 2 === 0
+      ? vGrad(ctx, rect.y + 2, 14, [[0, '#ff7a5c'], [1, RED_DEEP]])
+      : vGrad(ctx, rect.y + 2, 14, [[0, '#3fd0bd'], [1, TEAL_DEEP]]);
     ctx.beginPath(); ctx.arc(rect.x + rect.width / 2, rect.y + 9, 7, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     gloss(ctx, rect.x + rect.width / 2 - 2, rect.y + 6, 2.4, 1.6, 0.8);
@@ -801,7 +991,12 @@ function drawStation(ctx, state, kind, now) {
       continue;
     }
     if (isGrill && slot.phase === 'cooking') drawFlames(ctx, cx, slotRect.y + 88, now, slotIndex * 3.1);
-    if (!isGrill) drawSteam(ctx, cx, slotRect.y + 14, 0.8, now * 1.6 + slotIndex * 2);
+    if (!isGrill) {
+      drawSteam(ctx, cx, slotRect.y + 14, 0.95, now * 1.6 + slotIndex * 2);
+      drawSteam(ctx, cx - 15, slotRect.y + 22, 0.6, now * 1.25 + slotIndex * 3.1);
+    }
+    if (isGrill) coolShadow(ctx, cx, slotRect.y + 80, 30, 7);
+    else contactShadow(ctx, cx, slotRect.y + 80, 27, 6, 0.22);
     drawIngredientIcon(ctx, slot.ingredient, cx, slotRect.y + 52, 27);
     if (slot.phase === 'cooking') {
       const fraction = Math.min(1, slot.t / ingredient.cookSeconds);
@@ -832,8 +1027,9 @@ function drawStation(ctx, state, kind, now) {
 }
 
 /**
- * The stall's chef, standing by the plate: white hat and apron, a red neckerchief,
- * an idle bob, and a happy bounce with arms up while a fresh "+$" floater rises.
+ * The stall's chef, standing by the plate: a tall shaded hat, a teal neckerchief,
+ * an apron with a checked pocket, a ladle in his right hand, an idle bob, and a
+ * happy bounce with arms up while a fresh "+$" floater rises.
  * (cx, feetY) is where the shoes land; scale 1 is the in-kitchen size.
  */
 function drawChef(ctx, cx, feetY, scale, now, celebrate) {
@@ -841,17 +1037,28 @@ function drawChef(ctx, cx, feetY, scale, now, celebrate) {
   ctx.save();
   ctx.translate(cx, feetY + bob * scale);
   ctx.scale(scale, scale);
-  ctx.fillStyle = 'rgba(46, 20, 2, 0.25)';
-  ctx.beginPath(); ctx.ellipse(0, 2 - bob, 30, 6, 0, 0, Math.PI * 2); ctx.fill();
+  contactShadow(ctx, 0, 2 - bob, 30, 6, 0.25);
   // Body: a white apron over a warm shirt, with the outline everywhere.
   fillRound(ctx, -27, -62, 54, 62, 14, vGrad(ctx, -62, 62, [[0, '#ffffff'], [1, '#f0e4c8']]));
-  ctx.fillStyle = RED;
+  // The teal neckerchief, knotted at the throat.
+  ctx.fillStyle = vGrad(ctx, -62, 28, [[0, TEAL_LIGHT], [1, TEAL_DEEP]]);
   ctx.beginPath();
   ctx.moveTo(-27, -62); ctx.lineTo(27, -62); ctx.lineTo(0, -34);
   ctx.closePath(); ctx.fill();
+  ctx.fillStyle = TEAL_DEEP;
+  ctx.beginPath(); ctx.arc(0, -40, 4.6, 0, Math.PI * 2); ctx.fill();
   strokeRound(ctx, -27, -62, 54, 62, 14, OUTLINE, 3);
   ctx.strokeStyle = '#d9c9a3'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(-14, -30); ctx.lineTo(-14, -6); ctx.moveTo(14, -30); ctx.lineTo(14, -6); ctx.stroke();
+  // The apron pocket, checked cloth picked out in teal thread.
+  fillRound(ctx, 5, -27, 17, 14, 3, '#fdf6dc');
+  strokeRound(ctx, 5, -27, 17, 14, 3, 'rgba(74, 36, 16, 0.55)', 1.6);
+  ctx.strokeStyle = 'rgba(14, 110, 98, 0.55)'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(10.5, -27); ctx.lineTo(10.5, -13);
+  ctx.moveTo(16.5, -27); ctx.lineTo(16.5, -13);
+  ctx.moveTo(5, -20); ctx.lineTo(22, -20);
+  ctx.stroke();
   // Arms: resting at the sides, or thrown up when a plate sells.
   ctx.strokeStyle = OUTLINE; ctx.lineWidth = 9; ctx.lineCap = 'round';
   ctx.beginPath();
@@ -873,22 +1080,41 @@ function drawChef(ctx, cx, feetY, scale, now, celebrate) {
     ctx.moveTo(24, -52); ctx.lineTo(33, -22);
   }
   ctx.stroke();
-  // Head and the tall white hat.
+  // The ladle in his right hand: a wooden handle and a little steel bowl.
+  const handX = celebrate ? 38 : 33;
+  const handY = celebrate ? -78 : -22;
+  ctx.strokeStyle = '#8a5a2e'; ctx.lineWidth = 3.4;
+  ctx.beginPath(); ctx.moveTo(handX - 3, handY + 3); ctx.lineTo(handX + 11, handY - 12); ctx.stroke();
+  ctx.fillStyle = vGrad(ctx, handY - 22, 12, [[0, '#cfd8de'], [1, '#8d99a3']]);
+  ctx.beginPath(); ctx.ellipse(handX + 14, handY - 15, 7.5, 5, -0.6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = OUTLINE; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.ellipse(handX + 14, handY - 15, 7.5, 5, -0.6, 0, Math.PI * 2); ctx.stroke();
+  // Head, rosy-cheeked and determined, and the tall shaded hat.
   ctx.fillStyle = vGrad(ctx, -96, 34, [[0, '#ffd9a3'], [1, '#f0af72']]);
   ctx.beginPath(); ctx.arc(0, -79, 17, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = OUTLINE; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.arc(0, -79, 17, 0, Math.PI * 2); ctx.stroke();
-  fillRound(ctx, -16, -106, 32, 16, 7, '#ffffff');
+  ctx.fillStyle = vGrad(ctx, -122, 30, [[0, '#ffffff'], [1, '#e8dcc0']]);
+  ctx.beginPath(); ctx.arc(0, -114, 10, 0, Math.PI * 2); ctx.fill();
+  fillRound(ctx, -15, -118, 30, 27, 9, ctx.fillStyle);
   fillRound(ctx, -18, -94, 36, 9, 4, '#ffffff');
-  strokeRound(ctx, -16, -106, 32, 16, 7, OUTLINE, 2.5);
+  ctx.strokeStyle = OUTLINE; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(0, -114, 10, 0, Math.PI * 2); ctx.stroke();
+  strokeRound(ctx, -15, -118, 30, 27, 9, OUTLINE, 2.5);
   strokeRound(ctx, -18, -94, 36, 9, 4, OUTLINE, 2.5);
+  gloss(ctx, -6, -112, 4.5, 2.6, 0.65);
   ctx.fillStyle = INK.ink;
   ctx.beginPath(); ctx.arc(-6, -80, 1.9, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(6, -80, 1.9, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = INK.ink; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-9.5, -87); ctx.lineTo(-3, -85.4);
+  ctx.moveTo(9.5, -87); ctx.lineTo(3, -85.4);
+  ctx.stroke();
   ctx.fillStyle = 'rgba(244, 114, 96, 0.55)';
   ctx.beginPath(); ctx.arc(-10, -73, 3.6, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(10, -73, 3.6, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = INK.ink; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.strokeStyle = INK.ink; ctx.lineWidth = 2;
   ctx.beginPath();
   if (celebrate) ctx.arc(0, -74, 6, Math.PI * 0.1, Math.PI * 0.9);
   else ctx.arc(0, -76, 5, Math.PI * 0.2, Math.PI * 0.8);
@@ -896,14 +1122,353 @@ function drawChef(ctx, cx, feetY, scale, now, celebrate) {
   ctx.restore();
 }
 
+/**
+ * A dish as it is actually served, drawn whole on the plate: each recipe paints
+ * its layers in step order, so a half-built plate shows a half-built dish — the
+ * bowl and noodle mound first for phở, the rice dome before its pork for cơm
+ * tấm. (0, 0) is the plate's centre; everything fits inside the plate's rim.
+ */
+function drawComposedDish(ctx, recipeId, stepsDone, cx, cy, now) {
+  const has = (id) => stepsDone.includes(id);
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (recipeId === 'pho-bo') paintPho(ctx, has, now);
+  else if (recipeId === 'com-tam') paintComTam(ctx, has, now);
+  else if (recipeId === 'banh-mi') paintBanhMi(ctx, has, now);
+  else if (recipeId === 'goi-cuon') paintGoiCuon(ctx, has, now);
+  else if (recipeId === 'ca-phe') paintCaPhe(ctx, has, now);
+  ctx.restore();
+}
+
+/** Phở bò composed: a lacquered bowl, noodle mound, beef fanned, broth sheen, garnish. */
+function paintPho(ctx, has, now) {
+  void now;
+  // The bowl's foot, then its red lacquer body.
+  fillRound(ctx, -15, 22, 30, 10, 3, '#7e1d14');
+  ctx.beginPath();
+  ctx.moveTo(-60, -8);
+  ctx.quadraticCurveTo(0, 62, 60, -8);
+  ctx.closePath();
+  ctx.fillStyle = vGrad(ctx, -8, 66, [[0, '#e0483a'], [1, '#9c271e']]);
+  ctx.fill();
+  ctx.strokeStyle = OUTLINE; ctx.lineWidth = 3; ctx.stroke();
+  gloss(ctx, -34, 18, 13, 5, 0.3);
+  // Rim and broth: pale noodle water until the broth ladle lands, then rich stock.
+  ctx.fillStyle = '#fff6dc';
+  ctx.beginPath(); ctx.ellipse(0, -8, 60, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = has('broth') ? '#e8a54b' : '#f3d9a0';
+  ctx.beginPath(); ctx.ellipse(0, -8, 52, 12.5, 0, 0, Math.PI * 2); ctx.fill();
+  // The noodle mound, with its swirls.
+  ctx.fillStyle = '#f9efc6';
+  ctx.beginPath(); ctx.ellipse(0, -13, 40, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#dfc384'; ctx.lineWidth = 3;
+  for (const [ox, oy, r] of [[-16, -15, 8], [4, -18, 10], [20, -13, 7], [-4, -9, 8]]) {
+    ctx.beginPath(); ctx.arc(ox, oy, r, Math.PI * 0.15, Math.PI * 1.5); ctx.stroke();
+  }
+  // Beef slices fanned across the mound.
+  if (has('beef')) {
+    for (let i = 0; i < 4; i += 1) {
+      ctx.save();
+      ctx.translate(-30 + i * 19, -21 + (i % 2) * 5);
+      ctx.rotate(-0.42 + i * 0.26);
+      fillRound(ctx, -13, -6, 26, 12, 6, vGrad(ctx, -6, 12, [[0, '#cd5a4a'], [1, '#a03428']]));
+      ctx.strokeStyle = '#f3d9c8'; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, -1); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // Broth sheen: a gloss sweep and a constellation of oil droplets.
+  if (has('broth')) {
+    gloss(ctx, -17, -11, 17, 4.2, 0.5);
+    ctx.fillStyle = 'rgba(246, 185, 59, 0.8)';
+    for (let drop = 0; drop < 5; drop += 1) {
+      ctx.beginPath();
+      ctx.arc(-34 + hash01(drop * 7 + 1) * 68, -13 + hash01(drop * 3 + 5) * 9, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Garnish: herb sprinkle, chilli rings, a lime wedge, chopsticks at rest.
+  if (has('herbs')) {
+    ctx.fillStyle = LEAF;
+    for (let leaf = 0; leaf < 8; leaf += 1) {
+      const lx = -36 + hash01(leaf * 11 + 2) * 72;
+      const ly = -19 + hash01(leaf * 5 + 9) * 12;
+      ctx.beginPath(); ctx.ellipse(lx, ly, 4.4, 2.1, hash01(leaf) * 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = '#d63c2f'; ctx.lineWidth = 2.4;
+    for (const [rx, ry] of [[19, -17], [27, -9]]) {
+      ctx.beginPath(); ctx.arc(rx, ry, 3.4, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#8fce62';
+    ctx.beginPath();
+    ctx.moveTo(40, -16); ctx.quadraticCurveTo(54, -18, 52, -6); ctx.quadraticCurveTo(45, -6, 40, -16);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#4d8a35'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(40, -16); ctx.quadraticCurveTo(54, -18, 52, -6); ctx.quadraticCurveTo(45, -6, 40, -16);
+    ctx.closePath(); ctx.stroke();
+    ctx.strokeStyle = '#8a5a2e'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(26, -14); ctx.lineTo(58, -42);
+    ctx.moveTo(34, -10); ctx.lineTo(64, -34);
+    ctx.stroke();
+  }
+}
+
+/** Cơm tấm composed: a rice dome, a glazed pork chop with its bone, egg, sauce. */
+function paintComTam(ctx, has, now) {
+  void now;
+  // The broken-rice dome, grains picked out, scallion oil glistening on top.
+  if (has('rice')) {
+    ctx.fillStyle = vGrad(ctx, -22, 48, [[0, '#ffffff'], [1, '#e9e2cd']]);
+    ctx.beginPath(); ctx.ellipse(-18, 8, 40, 25, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(120, 105, 70, 0.3)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(-18, 8, 40, 25, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(120, 105, 70, 0.35)'; ctx.lineWidth = 1;
+    for (const [dx, dy, rot] of [[-36, -6, 0.5], [-16, -12, 1.2], [2, -4, 0.2], [-26, 2, 0.9], [-8, 6, 0.4]]) {
+      ctx.save(); ctx.translate(dx, dy); ctx.rotate(rot);
+      ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 2.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = 'rgba(92, 184, 78, 0.75)';
+    for (let dot = 0; dot < 6; dot += 1) {
+      ctx.beginPath();
+      ctx.arc(-34 + hash01(dot * 13 + 4) * 34, -10 + hash01(dot * 7 + 1) * 12, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    gloss(ctx, -28, -8, 12, 4, 0.5);
+  }
+  // The pork chop: char lines, a glaze sheen, and its little bone.
+  if (has('pork')) {
+    ctx.save();
+    ctx.translate(27, 13);
+    ctx.rotate(-0.22);
+    ctx.fillStyle = vGrad(ctx, -19, 38, [[0, '#f2a7ba'], [0.6, '#e58aa0'], [1, '#cf6d8a']]);
+    ctx.beginPath(); ctx.ellipse(0, 0, 29, 19, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.ellipse(0, 0, 29, 19, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(94, 40, 18, 0.8)'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    for (const dx of [-13, -2, 9]) {
+      ctx.beginPath(); ctx.moveTo(dx - 3, -11); ctx.lineTo(dx + 3, 11); ctx.stroke();
+    }
+    ctx.fillStyle = '#fdf6dd';
+    fillRound(ctx, 18, -4, 17, 8, 4, '#fdf6dd');
+    ctx.beginPath(); ctx.arc(35, 0, 5.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(120, 105, 70, 0.4)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(35, 0, 5.4, 0, Math.PI * 2); ctx.stroke();
+    gloss(ctx, -10, -9, 13, 4.4, 0.55);
+    ctx.restore();
+  }
+  // The fried egg, overlapping the rice, its yolk ready to run.
+  if (has('egg')) {
+    ctx.fillStyle = '#fffef8';
+    ctx.beginPath(); ctx.ellipse(-4, -24, 24, 16, 0.25, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ddd2b2'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(-4, -24, 24, 16, 0.25, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = GOLD;
+    ctx.beginPath(); ctx.arc(-2, -24, 9.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffc95e';
+    ctx.beginPath(); ctx.arc(-4, -26, 6.4, 0, Math.PI * 2); ctx.fill();
+    gloss(ctx, -5, -28, 3.4, 2.1, 0.9);
+  }
+  // The sauce: a drizzle over the chop and a little bowl of it at the rim.
+  if (has('sauce')) {
+    ctx.strokeStyle = 'rgba(168, 84, 44, 0.85)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    for (const dy of [4, 12, 20]) {
+      ctx.beginPath();
+      ctx.moveTo(8, dy);
+      ctx.quadraticCurveTo(27, dy - 6, 46, dy);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(36, 26);
+    ctx.quadraticCurveTo(48, 44, 60, 26);
+    ctx.closePath();
+    ctx.fillStyle = vGrad(ctx, 26, 18, [[0, '#c93a2e'], [1, '#8f2318']]);
+    ctx.fill();
+    ctx.fillStyle = '#c46a35';
+    ctx.beginPath(); ctx.ellipse(48, 26, 12, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+    gloss(ctx, 43, 25, 4, 1.4, 0.6);
+  }
+}
+
+/** Bánh mì composed: a split baguette, its fillings layered and peeking out. */
+function paintBanhMi(ctx, has, now) {
+  void now;
+  ctx.save();
+  ctx.rotate(-0.1);
+  // The bottom half: crust below, pale crumb above.
+  ctx.fillStyle = vGrad(ctx, -4, 26, [[0, '#f0c078'], [0.55, '#dfa050'], [1, '#b97a2e']]);
+  ctx.beginPath(); ctx.ellipse(0, 12, 63, 17, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(122, 72, 20, 0.75)'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.ellipse(0, 12, 63, 17, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#fbe3ae';
+  ctx.beginPath(); ctx.ellipse(0, 5, 58, 12, 0, 0, Math.PI * 2); ctx.fill();
+  // The pâté smear along the crumb.
+  if (has('pate')) {
+    ctx.fillStyle = 'rgba(164, 113, 74, 0.92)';
+    ctx.beginPath(); ctx.ellipse(0, 3, 48, 8, 0, 0, Math.PI * 2); ctx.fill();
+    gloss(ctx, -18, 1, 14, 2.8, 0.35);
+  }
+  // Grilled pork slices peeking out of the split.
+  if (has('pork')) {
+    for (const dx of [-30, -1, 28]) {
+      ctx.save();
+      ctx.translate(dx, -3);
+      ctx.rotate(dx === -1 ? 0.06 : -0.1);
+      fillRound(ctx, -14, -7, 28, 13, 6, vGrad(ctx, -7, 13, [[0, '#f2a7ba'], [1, '#cf6d8a']]));
+      ctx.strokeStyle = 'rgba(94, 40, 18, 0.7)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-5, -4); ctx.lineTo(-3, 3); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // Pickle shreds and herb flecks standing proud of the filling.
+  if (has('pickles')) {
+    ctx.strokeStyle = '#f59a4e'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    for (const [dx, tilt] of [[-38, -0.4], [-14, 0.2], [12, -0.25], [36, 0.35]]) {
+      ctx.beginPath();
+      ctx.moveTo(dx, -6);
+      ctx.lineTo(dx + tilt * 12, -16);
+      ctx.stroke();
+    }
+    ctx.fillStyle = LEAF;
+    for (const dx of [-24, 4, 24]) {
+      ctx.beginPath(); ctx.ellipse(dx, -12, 4.6, 2.2, dx * 0.04, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // The top half, tilted up at the back so the filling shows.
+  ctx.save();
+  ctx.translate(4, -19);
+  ctx.rotate(0.13);
+  ctx.fillStyle = vGrad(ctx, -15, 30, [[0, '#f4c67e'], [0.55, '#dfa050'], [1, '#b97a2e']]);
+  ctx.beginPath(); ctx.ellipse(0, 0, 61, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(122, 72, 20, 0.75)'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.ellipse(0, 0, 61, 15, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#fbe3ae'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+  for (let i = -1; i <= 1; i += 1) {
+    ctx.beginPath(); ctx.moveTo(i * 28 - 6, -7); ctx.lineTo(i * 28 + 6, 1); ctx.stroke();
+  }
+  gloss(ctx, -22, -8, 17, 4, 0.4);
+  ctx.restore();
+  ctx.restore();
+}
+
+/** Gỏi cuốn composed: three translucent rolls on a little dish, dip at the side. */
+function paintGoiCuon(ctx, has, now) {
+  void now;
+  // The little oval dish the rolls are served on.
+  ctx.fillStyle = vGrad(ctx, 2, 30, [[0, '#f4f8f8'], [1, '#c8d6d4']]);
+  ctx.beginPath(); ctx.ellipse(0, 17, 65, 18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(14, 110, 98, 0.45)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(0, 17, 65, 18, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, 17, 52, 12, 0, 0, Math.PI * 2); ctx.stroke();
+  // Three rolls in a row, their fillings ghosting through the rice paper.
+  for (let i = -1; i <= 1; i += 1) {
+    ctx.save();
+    ctx.translate(i * 37, 3 - Math.abs(i) * 2);
+    ctx.rotate(i * 0.12);
+    if (has('shrimp')) {
+      ctx.strokeStyle = '#f08a4b'; ctx.lineWidth = 6.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(1, 1, 7.5, Math.PI * 0.7, Math.PI * 1.95); ctx.stroke();
+      ctx.strokeStyle = '#c25e22'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(1, 1, 7.5, Math.PI * 1.05, Math.PI * 1.3); ctx.stroke();
+    }
+    if (has('herbs')) {
+      ctx.fillStyle = 'rgba(77, 155, 71, 0.85)';
+      for (const [fx, fy] of [[-8, -4], [6, 5], [-3, 7]]) {
+        ctx.beginPath(); ctx.ellipse(fx, fy, 4, 1.9, fx * 0.2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    fillRound(ctx, -16, -11, 32, 22, 10, 'rgba(250, 246, 233, 0.55)');
+    strokeRound(ctx, -16, -11, 32, 22, 10, 'rgba(160, 148, 112, 0.8)', 1.8);
+    ctx.strokeStyle = 'rgba(160, 148, 112, 0.5)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(-4, 0, 8, Math.PI * 0.4, Math.PI * 1.2); ctx.stroke();
+    gloss(ctx, -6, -6, 7, 2.6, 0.5);
+    ctx.restore();
+  }
+  // A fresh herb sprig beside the dish, and the dip bowl when the sauce lands.
+  if (has('herbs')) drawIngredientIcon(ctx, 'herbs', -54, 26, 12);
+  if (has('sauce')) {
+    ctx.beginPath();
+    ctx.moveTo(38, 24);
+    ctx.quadraticCurveTo(50, 42, 62, 24);
+    ctx.closePath();
+    ctx.fillStyle = vGrad(ctx, 24, 18, [[0, '#c93a2e'], [1, '#8f2318']]);
+    ctx.fill();
+    ctx.fillStyle = '#c46a35';
+    ctx.beginPath(); ctx.ellipse(50, 24, 12, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#e59a5f'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(50, 24, 5.5, Math.PI * 0.3, Math.PI * 1.5); ctx.stroke();
+  }
+}
+
+/** Cà phê composed: the glass, its phin dripper, the milk layer, the ice. */
+function paintCaPhe(ctx, has, now) {
+  void now;
+  // The glass: a pale outline until the coffee lands, then dark and layered.
+  const glassPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(-38, -26); ctx.lineTo(38, -26);
+    ctx.lineTo(29, 36); ctx.lineTo(-29, 36);
+    ctx.closePath();
+  };
+  glassPath();
+  ctx.fillStyle = has('coffee') ? '#4a2a16' : 'rgba(230, 242, 248, 0.5)';
+  ctx.fill();
+  if (has('coffee')) {
+    ctx.save();
+    glassPath(); ctx.clip();
+    ctx.fillStyle = vGrad(ctx, -26, 62, [[0, '#6b4020'], [1, '#2e1a0c']]);
+    ctx.fillRect(-38, -26, 76, 62);
+    if (has('milk')) {
+      ctx.fillStyle = '#fdf6dd';
+      ctx.fillRect(-38, 15, 76, 21);
+      ctx.fillStyle = 'rgba(253, 246, 221, 0.5)';
+      ctx.fillRect(-38, 11, 76, 4);
+    }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+    ctx.fillRect(-27, -26, 9, 62);
+    ctx.restore();
+  }
+  // Ice cubes riding at the rim.
+  if (has('ice')) {
+    for (const [dx, dy, rot] of [[-15, -31, 0.4], [9, -35, 0.95], [24, -28, 0.2]]) {
+      ctx.save(); ctx.translate(dx, dy); ctx.rotate(rot);
+      fillRound(ctx, -8, -8, 16, 16, 3.5, '#dff2fc');
+      strokeRound(ctx, -8, -8, 16, 16, 3.5, '#9cc8e4', 1.8);
+      ctx.restore();
+    }
+  }
+  glassPath();
+  ctx.strokeStyle = 'rgba(230, 245, 255, 0.9)'; ctx.lineWidth = 2.4; ctx.stroke();
+  // The phin dripper on top, still dripping into the glass.
+  if (has('coffee')) {
+    fillRound(ctx, -25, -47, 50, 15, 4, vGrad(ctx, -47, 15, [[0, '#cfd8de'], [1, '#8d99a3']]));
+    strokeRound(ctx, -25, -47, 50, 15, 4, OUTLINE, 2);
+    ctx.fillStyle = '#7d8891';
+    ctx.beginPath(); ctx.arc(0, -49, 4.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(0, -49, 4.4, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#3a2415';
+    ctx.beginPath(); ctx.ellipse(0, -27, 2.1, 3.1, 0, 0, Math.PI * 2); ctx.fill();
+    drawSparkle(ctx, 33, -38, 6, '#ffffff', 0.9);
+  }
+}
+
 /** The plate on the counter and the dish it is becoming, layer by layer. */
 function drawPlate(ctx, state, now) {
-  counterPanel(ctx, PLATE_PANEL, 'YOUR PLATE', GOLD);
+  tealPanel(ctx, PLATE_PANEL, 'YOUR PLATE', '#7fe0cf');
   const recipe = plateRecipe(state) ?? (targetTicket(state) === null ? null : recipeById(targetTicket(state).recipeId));
   const { x: cx, y: cy, radius } = PLATE_CENTRE;
   const shakeX = state.shake > 0 ? Math.sin(now * 70) * state.shake * 14 : 0;
   ctx.save();
   ctx.translate(shakeX, 0);
+  const heroGlow = ctx.createRadialGradient(cx, cy, 30, cx, cy, 150);
+  heroGlow.addColorStop(0, 'rgba(255, 205, 110, 0.28)');
+  heroGlow.addColorStop(1, 'rgba(255, 205, 110, 0)');
+  ctx.fillStyle = heroGlow;
+  ctx.fillRect(cx - 150, cy - 150, 300, 300);
   ctx.fillStyle = 'rgba(46, 20, 2, 0.35)';
   ctx.beginPath(); ctx.ellipse(cx, cy + 10, radius + 12, radius * 0.92, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = vGrad(ctx, cy - radius, radius * 2, [[0, '#ffffff'], [0.75, '#fdf6dc'], [1, '#ecdcae']]);
@@ -913,13 +1478,18 @@ function drawPlate(ctx, state, now) {
   ctx.strokeStyle = 'rgba(120, 90, 40, 0.18)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(cx, cy, radius - 14, 0, Math.PI * 2); ctx.stroke();
   gloss(ctx, cx - radius * 0.4, cy - radius * 0.45, radius * 0.3, radius * 0.13, 0.5);
-  const spots = [[-32, -20], [32, -20], [-32, 26], [32, 26], [0, 2]];
-  state.plate.stepsDone.forEach((ingredientId, index) => {
-    const [dx, dy] = spots[index % spots.length];
-    ctx.fillStyle = 'rgba(46, 20, 2, 0.16)';
-    ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy + 17, 19, 5.5, 0, 0, Math.PI * 2); ctx.fill();
-    drawIngredientIcon(ctx, ingredientId, cx + dx, cy + dy, 25);
-  });
+  // Ceramic speckle in the plate's glaze, hashed around the rim.
+  ctx.fillStyle = 'rgba(150, 120, 60, 0.28)';
+  for (let dot = 0; dot < 14; dot += 1) {
+    const angle = hash01(dot * 19 + 4) * Math.PI * 2;
+    const ring = radius - 4 - hash01(dot * 7 + 2) * 9;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * ring, cy + Math.sin(angle) * ring, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (state.plate.recipeId !== null && state.plate.stepsDone.length > 0) {
+    drawComposedDish(ctx, state.plate.recipeId, state.plate.stepsDone, cx, cy, now);
+  }
   if (state.plate.stepsDone.length === 0) {
     label(ctx, 'click a bin below', cx, cy - 8, { size: 16, colour: 'rgba(44, 26, 14, 0.45)' });
     label(ctx, 'to start the dish', cx, cy + 16, { size: 16, colour: 'rgba(44, 26, 14, 0.45)' });
@@ -930,7 +1500,8 @@ function drawPlate(ctx, state, now) {
       drawSparkle(ctx, cx + Math.cos(angle) * (radius + 6), cy + Math.sin(angle) * (radius + 6) * 0.92,
         6 + 2.5 * Math.sin(now * 5 + spark * 1.7), '#fff3b0', 0.85);
     }
-    drawSteam(ctx, cx - 12, cy - radius + 6, 0.85, now * 1.8);
+    drawSteam(ctx, cx - 10, cy - 36, 0.95, now * 1.8);
+    drawSteam(ctx, cx + 16, cy - 28, 0.65, now * 1.4 + 2.2);
   }
   ctx.restore();
   const celebrating = state.floaters.some((floater) => floater.text.startsWith('+$') && floater.age < 0.9);
@@ -939,7 +1510,7 @@ function drawPlate(ctx, state, now) {
     label(ctx, recipe.name, PLATE_PANEL.x + PLATE_PANEL.width - 18, PLATE_PANEL.y + 26, { size: 21, colour: '#ffe9b0', align: 'right', shadow: true });
     if (plateComplete(state)) {
       shadowed(ctx, 6, 3, () => {
-        fillRound(ctx, cx - 86, cy + radius - 18, 172, 26, 13, vGrad(ctx, cy + radius - 18, 26, [[0, '#7ed473'], [1, LEAF_DEEP]]));
+        fillRound(ctx, cx - 86, cy + radius - 18, 172, 26, 13, vGrad(ctx, cy + radius - 18, 26, [[0, TEAL_LIGHT], [1, TEAL_DEEP]]));
       });
       strokeRound(ctx, cx - 86, cy + radius - 18, 172, 26, 13, OUTLINE, 2.5);
       label(ctx, 'READY TO SERVE!', cx, cy + radius - 4, { size: 15, colour: '#ffffff', shadow: true });
@@ -1002,8 +1573,9 @@ function drawMessage(ctx, state, recipe = null) {
 }
 
 /** The pass: cooked items waiting on little wooden boards for their plate. */
-function drawShelf(ctx, state) {
-  counterPanel(ctx, SHELF_PANEL, 'THE PASS — cooked & ready', '#bfe0f2');
+function drawShelf(ctx, state, now) {
+  tealPanel(ctx, SHELF_PANEL, 'THE PASS — cooked & ready', '#7fe0cf');
+  drawBunting(ctx, SHELF_PANEL.x + 278, SHELF_PANEL.y + 13, 168, now, 3);
   for (let index = 0; index < 4; index += 1) {
     const rect = shelfSlotRect(index);
     const ingredientId = state.shelf[index];
@@ -1030,7 +1602,7 @@ function drawShelf(ctx, state) {
 }
 
 /** The day's book: money, tallies, best streak, and the day bar with its rush. */
-function drawTally(ctx, state) {
+function drawTally(ctx, state, now) {
   counterPanel(ctx, TALLY_PANEL, 'TODAY AT THE STALL', GOLD);
   const x = TALLY_PANEL.x + 22;
   drawCoin(ctx, x + 12, TALLY_PANEL.y + 62, 13);
@@ -1047,6 +1619,14 @@ function drawTally(ctx, state) {
   ctx.clip();
   ctx.fillStyle = 'rgba(224, 72, 58, 0.6)';
   ctx.fillRect(barX + barW * (RUSH_START / DAY_LENGTH), barY, barW * ((RUSH_END - RUSH_START) / DAY_LENGTH), 14);
+  if (inRush(state)) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 92, 56, 0.95)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = `rgba(255, 110, 70, ${0.45 + 0.2 * Math.sin(now * 5)})`;
+    ctx.fillRect(barX + barW * (RUSH_START / DAY_LENGTH), barY, barW * ((RUSH_END - RUSH_START) / DAY_LENGTH), 14);
+    ctx.restore();
+  }
   ctx.fillStyle = vGrad(ctx, barY, 14, [[0, '#ffd968'], [1, GOLD_DEEP]]);
   ctx.fillRect(barX, barY, barW * Math.min(1, state.elapsed / DAY_LENGTH), 14);
   ctx.restore();
@@ -1075,6 +1655,17 @@ function drawBins(ctx, state, now) {
     strokeRound(ctx, rect.x, rect.y, rect.width, rect.height, 11, OUTLINE, 2);
     ctx.fillStyle = 'rgba(255, 226, 170, 0.28)';
     ctx.fillRect(rect.x + 8, rect.y + 4, rect.width - 16, 4);
+    // A woven cross-hatch worked into the crate's front.
+    ctx.save();
+    roundRect(ctx, rect.x, rect.y, rect.width, rect.height, 11);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(70, 38, 8, 0.15)';
+    ctx.lineWidth = 3;
+    for (let d = -1; d < 6; d += 1) {
+      ctx.beginPath(); ctx.moveTo(rect.x + d * 26, rect.y + rect.height); ctx.lineTo(rect.x + d * 26 + 34, rect.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rect.x + d * 26, rect.y); ctx.lineTo(rect.x + d * 26 + 34, rect.y + rect.height); ctx.stroke();
+    }
+    ctx.restore();
     // The ingredient sits on a little round cream board inside its crate.
     ctx.fillStyle = vGrad(ctx, rect.y + 15, 48, [[0, '#fffbe9'], [1, PAPER_DEEP]]);
     ctx.beginPath(); ctx.arc(rect.x + 30, rect.y + 39, 24, 0, Math.PI * 2); ctx.fill();
@@ -1124,6 +1715,21 @@ function drawFloaters(ctx, state, now) {
 
 /** A five-pointed star, filled with a glow or hollow, for the end-of-day grade. */
 function drawStar(ctx, cx, cy, s, filled) {
+  if (filled) {
+    // Little rays around a won star, so the grade itself seems to shine.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(246, 185, 59, 0.75)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = ray * Math.PI / 4 + 0.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * s * 1.25, cy + Math.sin(angle) * s * 1.25);
+      ctx.lineTo(cx + Math.cos(angle) * s * 1.6, cy + Math.sin(angle) * s * 1.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   ctx.beginPath();
   for (let point = 0; point < 10; point += 1) {
     const radius = point % 2 === 0 ? s : s * 0.45;
@@ -1174,6 +1780,45 @@ function drawLantern(ctx, x, topY, now, seed) {
   }
 }
 
+/**
+ * The title screen's canopy: a wide striped awning across the top of the stall,
+ * and beneath it a swagged string of festival bulbs, twinkling at hashed rates.
+ */
+function drawCanopy(ctx, now) {
+  const stripe = 46;
+  const band = 30;
+  ctx.save();
+  ctx.shadowColor = 'rgba(20, 8, 0, 0.55)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
+  for (let x = 0, i = 0; x < FIELD.width; x += stripe, i += 1) {
+    ctx.fillStyle = i % 2 === 0 ? '#e0483a' : '#fff3d0';
+    ctx.fillRect(x, 0, stripe, band);
+    ctx.beginPath(); ctx.ellipse(x + stripe / 2, band, stripe / 2, 13, 0, 0, Math.PI); ctx.fill();
+  }
+  ctx.restore();
+  // The bulb string: a wire sagging across the stall, a bulb every hand-span.
+  ctx.strokeStyle = 'rgba(255, 246, 220, 0.4)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(170, 50);
+  ctx.quadraticCurveTo(640, 78, 1110, 50);
+  ctx.stroke();
+  for (let i = 0; i < 15; i += 1) {
+    const t = (i + 0.5) / 15;
+    const bx = 170 + (1110 - 170) * t;
+    const by = 50 + 56 * t * (1 - t) + 7;
+    ctx.save();
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(now * 2.4 + i * 1.9);
+    ctx.shadowColor = 'rgba(255, 190, 80, 0.95)';
+    ctx.shadowBlur = 13;
+    ctx.fillStyle = '#ffd968';
+    ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    gloss(ctx, bx - 1.2, by - 1.4, 1.3, 0.9, 0.9);
+  }
+}
+
 /** The title card: the menu, the rules of the rush, and the way in. */
 function drawTitle(ctx, state, now) {
   const shade = ctx.createLinearGradient(0, 0, 0, FIELD.height);
@@ -1181,8 +1826,9 @@ function drawTitle(ctx, state, now) {
   shade.addColorStop(1, 'rgba(22, 9, 1, 0.93)');
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-  drawLantern(ctx, 108, 0, now, 0.5);
-  drawLantern(ctx, 1172, 0, now, 2.4);
+  drawCanopy(ctx, now);
+  drawLantern(ctx, 108, 40, now, 0.5);
+  drawLantern(ctx, 1172, 40, now, 2.4);
   ctx.save();
   ctx.font = `800 64px ${FONT}`;
   ctx.textAlign = 'center';
@@ -1234,9 +1880,11 @@ function drawEnd(ctx, state, now) {
     fillRound(ctx, 330, 66, 620, 640, 22, vGrad(ctx, 66, 640, [[0, '#fffbe9'], [1, '#f6df9f']]));
   });
   strokeRound(ctx, 330, 66, 620, 640, 22, OUTLINE, 3.5);
+  drawBunting(ctx, 356, 84, 148, now, 1);
+  drawBunting(ctx, 776, 84, 148, now, 4);
   // Confetti over the card: bright paper scraps at hashed spots, mid-fall.
   const confettiColours = ['#e0483a', '#f6b93b', '#5cb84e', '#4aa3df', '#ff8ac2'];
-  for (let piece = 0; piece < 42; piece += 1) {
+  for (let piece = 0; piece < 54; piece += 1) {
     const px = 330 + hash01(piece * 3 + 1) * 620;
     const fall = (hash01(piece * 7 + 2) * 640 + now * 14 * (0.5 + hash01(piece))) % 660;
     const py = 66 - 20 + fall;
@@ -1246,7 +1894,11 @@ function drawEnd(ctx, state, now) {
     ctx.rotate(hash01(piece * 11) * Math.PI + now * 0.4);
     ctx.fillStyle = confettiColours[piece % confettiColours.length];
     ctx.globalAlpha = 0.85;
-    ctx.fillRect(-5, -2.5, 10, 5);
+    if (piece % 3 === 0) {
+      ctx.beginPath(); ctx.arc(0, 0, 3.4, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillRect(-5, -2.5, 10, 5);
+    }
     ctx.restore();
   }
   ctx.save();
@@ -1261,6 +1913,8 @@ function drawEnd(ctx, state, now) {
   ctx.fillText('DAY OVER', 640, 122);
   ctx.restore();
   for (let star = 0; star < 3; star += 1) drawStar(ctx, 560 + star * 80, 196, 34, star < state.stars);
+  drawCoinStack(ctx, 424, 234);
+  drawCoinStack(ctx, 856, 234);
   label(ctx, state.stars === 3 ? 'A legendary service!' : state.stars === 2 ? 'A solid day at the stall.' : 'The stall survives to cook again.', 640, 262, { size: 20, colour: 'rgba(44, 26, 14, 0.65)' });
   const rows = [
     ['Money earned', `$${state.money}`],
@@ -1289,9 +1943,10 @@ export function drawGame(ctx, state, now) {
   drawStation(ctx, state, 'pot', now);
   drawPlate(ctx, state, now);
   drawChecklist(ctx, state, now);
-  drawShelf(ctx, state);
-  drawTally(ctx, state);
+  drawShelf(ctx, state, now);
+  drawTally(ctx, state, now);
   drawBins(ctx, state, now);
+  drawMotes(ctx, now);
   drawFloaters(ctx, state, now);
   if (state.screen === 'title') drawTitle(ctx, state, now);
   if (state.screen === 'end') drawEnd(ctx, state, now);

@@ -34,6 +34,7 @@ function stageCover(state) {
   state.plate = { recipeId: 'pho-bo', stepsDone: ['noodles'] };
   state.stations.grill[0] = slot('pork', 'cooking', 3.3);
   state.stations.pot[0] = slot('beef', 'ready', 1.2);
+  state.shelf = ['shrimp'];
   state.message = 'The beef is ready — click the pot!';
   state.messageAge = 0.4;
 }
