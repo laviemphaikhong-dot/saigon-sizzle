@@ -76,6 +76,7 @@ function stageServe(state) {
   state.plate = { recipeId: 'pho-bo', stepsDone: ['noodles', 'beef', 'broth', 'herbs'] };
   state.stations.pot[0] = slot('shrimp', 'cooking', 2);
   state.stations.grill[1] = slot('egg', 'ready', 0.8);
+  state.floaters = [{ x: 166, y: 162, text: '+$28', colour: '#f2b33d', age: 0.35 }];
   state.message = 'Plate complete — serve it!';
   state.messageAge = 0.4;
 }
